@@ -11,13 +11,19 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
     <title>Dovolená &amp; NV</title>
-    <script type="module" crossorigin src="./assets/index-Co3JShPC.js"></script>
+    <script type="module" crossorigin src="./assets/index-txe1R8Yl.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-CBYt8LED.css">
   </head>
   <body>
     <div id="root"></div>
     <script>
       if ("serviceWorker" in navigator) {
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (refreshing) return;
+          refreshing = true;
+          window.location.reload();
+        });
         window.addEventListener("load", () => {
           navigator.serviceWorker.register("./sw.js").catch(() => {});
         });
