@@ -3,7 +3,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 // ============================================================
 // APP VERSION — zvednout při každé úpravě
 // ============================================================
-const APP_VERSION = '6.11';
+const APP_VERSION = '6.12';
 
 // ============================================================
 // DB LAYER — tenký vlastní wrapper nad nativním IndexedDB
@@ -2364,6 +2364,7 @@ function MachinesScreen({ theme, db, refreshTick, machineColumns, onMachineColum
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [showColumnsMenu, setShowColumnsMenu] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showTip, setShowTip] = useState(false);
   // Vlastní touch-friendly drag-and-drop postavený na Pointer Events, protože
   // nativní HTML5 Drag and Drop API (draggable/onDragStart/onDrop) nefunguje
   // na dotykových zařízeních — Chrome/Firefox/Samsung Internet pro Android
@@ -2372,6 +2373,21 @@ function MachinesScreen({ theme, db, refreshTick, machineColumns, onMachineColum
   const [dragState, setDragState] = useState(null); // { type, id, x, y, overKey }
   const dragStateRef = useRef(null);
   const itemRectsRef = useRef(new Map()); // key ("machine:id" | "category:id") -> DOMRect
+
+  // Jednorázová nápověda: stroje založené rychle v pickeru po STOP dostanou
+  // jen jméno a jdou do Nezařazené — nikde jinde se člověk nedozví, že si tu
+  // může doladit ikonu, barvu, kategorii, poznámky a fotky. Ukáže se jen
+  // jednou při prvním vstupu do téhle záložky, pak se zapamatuje v settings.
+  useEffect(() => {
+    db.get('settings', 'machinesTipSeen').then(result => {
+      if (!result) setShowTip(true);
+    }).catch(() => setShowTip(true));
+  }, [db]);
+
+  function dismissTip() {
+    setShowTip(false);
+    db.put('settings', { id: 'machinesTipSeen', seen: true });
+  }
 
   const load = useCallback(async () => {
     const [allMachines, allCategories] = await Promise.all([db.getAll('machines'), db.getAll('categories')]);
@@ -2559,6 +2575,21 @@ function MachinesScreen({ theme, db, refreshTick, machineColumns, onMachineColum
           </div>
         </div>
       </div>
+
+      {showTip && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10, margin: '0 16px 14px',
+          background: theme.primarySoft, border: `1px solid ${theme.primary}44`, borderRadius: 14, padding: '12px 14px',
+        }}>
+          <div style={{ color: theme.primary, flexShrink: 0, marginTop: 1 }}><Icon.MachSparkle size={16} /></div>
+          <div style={{ flex: 1, fontSize: 12.5, color: theme.text, lineHeight: 1.5 }}>
+            Klepnutím na stroj mu můžeš nastavit <strong>ikonu, barvu, kategorii, poznámky i fotky</strong>.
+          </div>
+          <button onClick={dismissTip} style={{ background: 'none', border: 'none', color: theme.textFaint, flexShrink: 0 }}>
+            <Icon.X size={15} />
+          </button>
+        </div>
+      )}
 
       {machines.length === 0 && categories.length === 0 ? (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 30px', gap: 10 }}>
