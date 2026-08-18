@@ -1,72 +1,42 @@
-const CACHE_NAME = 'denik-udrzbare-v6.13';
-const CORE_ASSETS = [
-  './',
-  './index.html',
-  './app.jsx',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-];
-// Pre-fetched on install so icons/fonts work offline from the very first launch,
-// not just after the first successful online request.
-const CDN_ASSETS = [
-  'https://unpkg.com/@phosphor-icons/web@2.1.2/src/regular/style.css',
-  'https://unpkg.com/@phosphor-icons/web@2.1.2/src/regular/Phosphor.woff2',
-  'https://unpkg.com/@phosphor-icons/web@2.1.2/src/bold/style.css',
-  'https://unpkg.com/@phosphor-icons/web@2.1.2/src/bold/Phosphor-Bold.woff2',
-  'https://unpkg.com/@phosphor-icons/web@2.1.2/src/fill/style.css',
-  'https://unpkg.com/@phosphor-icons/web@2.1.2/src/fill/Phosphor-Fill.woff2',
-];
+const CACHE_VERSION = "1.8";
+const CACHE_NAME = "vacation-tracker-v" + CACHE_VERSION;
 
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(CORE_ASSETS)
-        .then(() => Promise.allSettled(CDN_ASSETS.map((url) => cache.add(url))))
-    ).catch(() => {})
-  );
+self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
 
-  // Network-first for external CDN assets (React/Babel/fonts/icons) so updates
-  // land when online, falling back to cache when offline.
-  const cdnHosts = ['https://unpkg.com', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'];
-  if (cdnHosts.includes(url.origin)) {
-    event.respondWith(
-      fetch(event.request)
-        .then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return res;
-        })
-        .catch(() => caches.match(event.request))
-    );
-    return;
-  }
+  // Always go to the network first for the HTML shell, so a new deployment
+  // is picked up immediately instead of serving a stale cached index.html.
+  const isNavigation = event.request.mode === "navigate";
 
-  // Cache-first for local app shell
-  if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
+  event.respondWith(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      try {
+        const networkResponse = await fetch(event.request, isNavigation ? { cache: "no-store" } : {});
+        if (networkResponse && networkResponse.status === 200) {
+          cache.put(event.request, networkResponse.clone());
+        }
+        return networkResponse;
+      } catch (err) {
+        const cached = await cache.match(event.request);
         if (cached) return cached;
-        return fetch(event.request).then((res) => {
-          const clone = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return res;
-        });
-      })
-    );
-  }
+        if (isNavigation) {
+          const fallback = await cache.match("./index.html");
+          if (fallback) return fallback;
+        }
+        throw err;
+      }
+    })
+  );
 });

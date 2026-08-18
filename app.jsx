@@ -3,7 +3,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 // ============================================================
 // APP VERSION — zvednout při každé úpravě
 // ============================================================
-const APP_VERSION = '6.13';
+const APP_VERSION = '6.14';
 
 // ============================================================
 // DB LAYER — tenký vlastní wrapper nad nativním IndexedDB
