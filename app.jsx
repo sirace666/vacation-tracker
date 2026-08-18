@@ -3,7 +3,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 // ============================================================
 // APP VERSION — zvednout při každé úpravě
 // ============================================================
-const APP_VERSION = '6.12';
+const APP_VERSION = '6.13';
 
 // ============================================================
 // DB LAYER — tenký vlastní wrapper nad nativním IndexedDB
@@ -433,7 +433,7 @@ function HomeScreen({ theme, activeSession, onStart, onStop, onOpenSettings, onO
   }
 
   return (
-    <div style={{ ...S.screen, background: theme.bg }}>
+    <div style={{ ...S.screen, background: theme.bg, overflowY: 'auto' }}>
       <div style={S.homeHeader}>
         <div style={S.homeHeaderTop}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -444,11 +444,9 @@ function HomeScreen({ theme, activeSession, onStart, onStop, onOpenSettings, onO
           </div>
           <IconButton theme={theme} onClick={onOpenSettings}><Icon.Settings size={19} /></IconButton>
         </div>
-        {activeSession && (
-          <div style={{ fontSize: 12, color: theme.textFaint, textAlign: 'center', marginTop: 14 }}>
-            Klidně appku zavři, čas běží dál na pozadí
-          </div>
-        )}
+        <div style={{ fontSize: 12, color: theme.textFaint, textAlign: 'center', marginTop: 14, minHeight: 16, visibility: activeSession ? 'visible' : 'hidden' }}>
+          Klidně appku zavři, čas běží dál na pozadí
+        </div>
       </div>
 
       <div style={S.timerWrap}>
@@ -2452,10 +2450,13 @@ function MachinesScreen({ theme, db, refreshTick, machineColumns, onMachineColum
   const longPressRef = useRef(null);
   const dragJustFinishedRef = useRef(false);
 
+  const dragStartPointRef = useRef(null);
+
   function startDragTracking(type, id, e) {
     if (type === 'category') return;
     const point = e.touches ? e.touches[0] : e;
     const startX = point.clientX, startY = point.clientY;
+    dragStartPointRef.current = { x: startX, y: startY };
     longPressRef.current = setTimeout(() => {
       const state = { type, id, x: startX, y: startY, overKey: null };
       dragStateRef.current = state;
@@ -2464,8 +2465,20 @@ function MachinesScreen({ theme, db, refreshTick, machineColumns, onMachineColum
     }, 250);
   }
 
+  // Pokud se prst při čekání na long-press posune o víc než pár pixelů,
+  // je to scroll gesto, ne úmysl přetáhnout blok — zrušíme čekající timer,
+  // ať prohlížeč může scrollovat normálně místo zablokování gesta.
+  function handleDragCandidateMove(e) {
+    if (!longPressRef.current || !dragStartPointRef.current) return;
+    const point = e.touches ? e.touches[0] : e;
+    const dx = Math.abs(point.clientX - dragStartPointRef.current.x);
+    const dy = Math.abs(point.clientY - dragStartPointRef.current.y);
+    if (dx > 8 || dy > 8) cancelDragStart();
+  }
+
   function cancelDragStart() {
     if (longPressRef.current) { clearTimeout(longPressRef.current); longPressRef.current = null; }
+    dragStartPointRef.current = null;
   }
 
   function handlePointerMoveGlobal(e) {
@@ -2660,6 +2673,7 @@ function MachinesScreen({ theme, db, refreshTick, machineColumns, onMachineColum
                           data-drop-key={machineDropKey}
                           onClick={() => { if (!dragJustFinishedRef.current) onOpenMachine(m); }}
                           onPointerDown={(e) => startDragTracking('machine', m.id, e)}
+                          onPointerMove={handleDragCandidateMove}
                           onPointerUp={cancelDragStart}
                           onPointerLeave={cancelDragStart}
                           style={{
@@ -2669,7 +2683,7 @@ function MachinesScreen({ theme, db, refreshTick, machineColumns, onMachineColum
                             border: `1px solid ${isMachineDropTarget ? theme.primary : (mColor ? `${mColor}4A` : theme.border)}`,
                             backdropFilter: theme.blur, textAlign: 'center', boxSizing: 'border-box',
                             opacity: isBeingDragged ? 0.4 : 1,
-                            touchAction: 'none',
+                            touchAction: isBeingDragged ? 'none' : 'pan-y',
                           }}
                         >
                           {MIconComp && (
